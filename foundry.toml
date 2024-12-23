@@ -3,4 +3,7 @@ src = "src"
 out = "out"
 libs = ["lib"]
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+evm_version = "london"
+solc_version = "0.8.23"
+optimizer = true
+optimizer_runs = 10000

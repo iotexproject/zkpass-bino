@@ -10,6 +10,8 @@ interface IVault {
 }
 
 contract ZkPassClaimer {
+    error InvalidEndTimestamp();
+    error ClaimEnded();
     error ClaimedAccount(address account);
     error ClaimedProof();
     error InvalidRewardProof();
@@ -20,10 +22,15 @@ contract ZkPassClaimer {
     IVault public immutable vault;
     IVerifier public immutable verifier;
     bytes32 public immutable rewardRoot;
+    uint256 public endTimestamp;
     mapping(address => bool) public claimedAccount;
     mapping(bytes32 => bool) public claimedProof;
 
-    constructor(address _vault, address _verifier, bytes32 _root) {
+    constructor(address _vault, address _verifier, bytes32 _root, uint256 _endTimestamp) {
+        if (_endTimestamp < block.timestamp) {
+            revert InvalidEndTimestamp();
+        }
+
         vault = IVault(_vault);
         verifier = IVerifier(_verifier);
         rewardRoot = _root;
@@ -36,6 +43,9 @@ contract ZkPassClaimer {
     function claim(Proof calldata _zkProof, address _account, uint256 _amount, bytes32[] calldata _rewardProof)
         external
     {
+        if (endTimestamp < block.timestamp) {
+            revert ClaimEnded();
+        }
         if (claimedAccount[_account]) {
             revert ClaimedAccount(_account);
         }

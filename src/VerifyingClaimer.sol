@@ -38,6 +38,7 @@ contract VerifingClaimer is Ownable {
         vault = IVault(_vault);
         validator = _validator;
         rewardRoot = _root;
+        endTimestamp = _endTimestamp;
     }
 
     function changeValidator(address _validator) external onlyOwner {

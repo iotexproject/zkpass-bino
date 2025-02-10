@@ -16,7 +16,7 @@ contract VerifingClaimer is Ownable {
     error ZeroAddress();
     error ClaimEnded();
     error ClaimedAccount(address account);
-    error ClaimedProof();
+    error ClaimedZkId(bytes32 zkId);
     error InvalidRewardProof();
     error InvalidValidator(address validator);
 
@@ -28,7 +28,7 @@ contract VerifingClaimer is Ownable {
     uint256 public immutable endTimestamp;
     address public validator;
     mapping(address => bool) public claimedAccount;
-    mapping(bytes32 => bool) public claimedProof;
+    mapping(bytes32 => bool) public claimedZkId;
 
     constructor(address _vault, address _validator, bytes32 _root, uint256 _endTimestamp) Ownable(msg.sender) {
         if (_endTimestamp < block.timestamp) {
@@ -54,6 +54,7 @@ contract VerifingClaimer is Ownable {
         address _account,
         bool _doubleCheck,
         uint256 _amount,
+        bytes32 _zkId,
         bytes calldata signature,
         bytes32[] calldata _rewardProof
     ) external {
@@ -62,6 +63,9 @@ contract VerifingClaimer is Ownable {
         }
         if (claimedAccount[_account]) {
             revert ClaimedAccount(_account);
+        }
+        if (claimedZkId[_zkId]) {
+            revert ClaimedZkId(_zkId);
         }
         bytes32 node = keccak256(abi.encodePacked(_account, _doubleCheck, _amount));
         if (_doubleCheck) {
@@ -75,6 +79,7 @@ contract VerifingClaimer is Ownable {
         }
 
         claimedAccount[_account] = true;
+        claimedZkId[_zkId] = true;
         vault.claim(_account, _amount);
         emit Claim(_account, _amount);
     }

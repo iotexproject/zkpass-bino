@@ -64,8 +64,11 @@ contract VerifingClaimer is Ownable {
         if (claimedAccount[_account]) {
             revert ClaimedAccount(_account);
         }
-        if (claimedZkId[_zkId]) {
-            revert ClaimedZkId(_zkId);
+        if (_zkId != 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) {
+            if (claimedZkId[_zkId]) {
+                revert ClaimedZkId(_zkId);
+            }
+            claimedZkId[_zkId] = true;
         }
         bytes32 node = keccak256(abi.encodePacked(_account, _doubleCheck, _amount));
         if (_doubleCheck) {
@@ -79,7 +82,6 @@ contract VerifingClaimer is Ownable {
         }
 
         claimedAccount[_account] = true;
-        claimedZkId[_zkId] = true;
         vault.claim(_account, _amount);
         emit Claim(_account, _amount);
     }

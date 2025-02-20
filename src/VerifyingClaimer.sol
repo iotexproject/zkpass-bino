@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -20,25 +20,31 @@ contract VerifingClaimer is Ownable {
     error InvalidRewardProof();
     error InvalidValidator(address validator);
 
+    event EndTimestampExtended(uint256 endTimestamp);
     event ChangeValidator(address indexed validator);
     event Claim(address indexed account, uint256 amount);
 
     IVault public immutable vault;
     bytes32 public immutable rewardRoot;
-    uint256 public immutable endTimestamp;
+    uint256 public endTimestamp;
     address public validator;
     mapping(address => bool) public claimedAccount;
     mapping(bytes32 => bool) public claimedZkId;
 
     constructor(address _vault, address _validator, bytes32 _root, uint256 _endTimestamp) Ownable(msg.sender) {
-        if (_endTimestamp < block.timestamp) {
-            revert InvalidEndTimestamp();
-        }
-
         vault = IVault(_vault);
         validator = _validator;
         rewardRoot = _root;
         endTimestamp = _endTimestamp;
+    }
+
+    function extendEndTimestamp(uint256 _endTimestamp) external onlyOwner {
+        if (_endTimestamp < endTimestamp) {
+            revert InvalidEndTimestamp();
+        }
+
+        endTimestamp = _endTimestamp;
+        emit EndTimestampExtended(_endTimestamp);
     }
 
     function changeValidator(address _validator) external onlyOwner {

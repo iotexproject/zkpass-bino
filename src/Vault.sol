@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
@@ -44,6 +44,10 @@ contract Vault is Ownable, ReentrancyGuard {
 
         payable(_recipient).sendValue(_amount);
         emit Claim(msg.sender, _recipient, _amount);
+    }
+
+    function withdraw() external onlyOwner {
+        payable(msg.sender).sendValue(address(this).balance);
     }
 
     receive() external payable {}

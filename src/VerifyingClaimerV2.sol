@@ -18,7 +18,7 @@ contract VerifingClaimerV2 is Ownable {
     error InvalidEndTimestamp();
     error ZeroAddress();
     error ClaimEnded();
-    error ClaimedAccount(address account);
+    error ClaimedAccount(uint256 projectId, address account);
     error ClaimedZkId(bytes32 zkId);
     error InvalidRewardProof();
     error InvalidValidator(address validator);
@@ -26,7 +26,7 @@ contract VerifingClaimerV2 is Ownable {
 
     event EndTimestampExtended(uint256 endTimestamp);
     event ChangeValidator(address indexed validator);
-    event Claim(address indexed token, address indexed account, uint256 amount);
+    event Claim(address indexed token, uint256 indexed projectId, address indexed account, uint256 amount);
 
     IVaultV2 public immutable vault;
     bytes32 public immutable rewardRoot;
@@ -34,7 +34,7 @@ contract VerifingClaimerV2 is Ownable {
     address public validator;
     address public proofVerifier;
     address public rewardToken;
-    mapping(address => bool) public claimedAccount;
+    mapping(uint256 => mapping(address => bool)) public claimedAccount;
     mapping(bytes32 => bool) public claimedZkId;
 
     constructor(address _vault, address _validator, address _proofVerifier, address _token, bytes32 _root, uint256 _endTimestamp) Ownable(msg.sender) {
@@ -66,6 +66,7 @@ contract VerifingClaimerV2 is Ownable {
 
     function claim(
         bool _doubleCheck,
+        uint256 _projectId,
         uint256 _amount,
         bytes calldata signature,
         bytes32[] calldata _rewardProof,
@@ -76,8 +77,8 @@ contract VerifingClaimerV2 is Ownable {
         }
         address _account = _zkPassProof.recipient;
         bytes32 _zkId = _zkPassProof.uHash;
-        if (claimedAccount[_account]) {
-            revert ClaimedAccount(_account);
+        if (claimedAccount[_projectId][_account]) {
+            revert ClaimedAccount(_projectId, _account);
         }
         if (_zkId != 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) {
             if (claimedZkId[_zkId]) {
@@ -85,7 +86,7 @@ contract VerifingClaimerV2 is Ownable {
             }
             claimedZkId[_zkId] = true;
         }
-        bytes32 node = keccak256(abi.encodePacked(_account, _doubleCheck, _amount));
+        bytes32 node = keccak256(abi.encodePacked(_projectId, _account, _doubleCheck, _amount));
         if (_doubleCheck) {
             address _validator = node.recover(signature);
             if (_validator != validator) {
@@ -99,8 +100,8 @@ contract VerifingClaimerV2 is Ownable {
             revert InvalidRewardProof();
         }
 
-        claimedAccount[_account] = true;
+        claimedAccount[_projectId][_account] = true;
         vault.claim(rewardToken, _account, _amount);
-        emit Claim(rewardToken, _account, _amount);
+        emit Claim(rewardToken, _projectId, _account, _amount);
     }
 }

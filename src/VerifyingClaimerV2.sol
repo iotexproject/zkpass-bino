@@ -15,44 +15,61 @@ interface IVaultV2 {
 contract VerifingClaimerV2 is Ownable {
     using ECDSA for bytes32;
 
-    error InvalidEndTimestamp();
     error ZeroAddress();
-    error ClaimEnded();
+    error ClaimEnded(uint256 projectId);
     error ClaimedAccount(uint256 projectId, address account);
-    error ClaimedZkId(bytes32 zkId);
+    error ClaimedZkId(uint256 projectId, bytes32 zkId);
+    error InvalidProjectId(uint256 projectId);
+    error InvalidEndTimestamp();
     error InvalidRewardProof();
     error InvalidValidator(address validator);
     error InvalidZKPassProof();
 
-    event EndTimestampExtended(uint256 endTimestamp);
+    event EndTimestampExtended(uint256 projectId, uint256 endTimestamp);
     event ChangeValidator(address indexed validator);
     event Claim(address indexed token, uint256 indexed projectId, address indexed account, uint256 amount);
 
     IVaultV2 public immutable vault;
-    bytes32 public immutable rewardRoot;
-    uint256 public endTimestamp;
+    uint256 public nextProjectId;
     address public validator;
     address public proofVerifier;
-    address public rewardToken;
-    mapping(uint256 => mapping(address => bool)) public claimedAccount;
-    mapping(bytes32 => bool) public claimedZkId;
+    mapping(uint256 => bytes32) private rewardRoots;
+    mapping(uint256 => uint256) private endTimestamps;
+    mapping(uint256 => address) private rewardTokens;
+    mapping(uint256 => mapping(address => bool)) private claimedAccounts;
+    mapping(uint256 => mapping(bytes32 => bool)) private claimedZkIds;
 
-    constructor(address _vault, address _validator, address _proofVerifier, address _token, bytes32 _root, uint256 _endTimestamp) Ownable(msg.sender) {
+    constructor(address _vault, address _validator, address _proofVerifier) Ownable(msg.sender) {
         vault = IVaultV2(_vault);
         validator = _validator;
         proofVerifier = _proofVerifier;
-        rewardToken = _token;
-        rewardRoot = _root;
-        endTimestamp = _endTimestamp;
+        nextProjectId = 1;
     }
 
-    function extendEndTimestamp(uint256 _endTimestamp) external onlyOwner {
-        if (_endTimestamp < endTimestamp) {
+    function addProject(address _token, bytes32 _root, uint256 _endTimestamp) external onlyOwner returns (uint256 projectId_) {
+        if (_token == address(0)) {
+            revert ZeroAddress();
+        }
+        if (_endTimestamp < block.timestamp) {
+            revert InvalidEndTimestamp();
+        }
+        projectId_ = nextProjectId++;
+        rewardTokens[projectId_] = _token;
+        rewardRoots[projectId_] = _root;
+        endTimestamps[projectId_] = _endTimestamp;
+    }
+
+    function extendEndTimestamp(uint256 _projectId, uint256 _endTimestamp) external onlyOwner {
+        uint256 curr = endTimestamps[_projectId];
+        if (curr == 0) {
+            revert InvalidProjectId(_projectId);
+        }
+        if (_endTimestamp < curr) {
             revert InvalidEndTimestamp();
         }
 
-        endTimestamp = _endTimestamp;
-        emit EndTimestampExtended(_endTimestamp);
+        endTimestamps[_projectId] = _endTimestamp;
+        emit EndTimestampExtended(_projectId, _endTimestamp);
     }
 
     function changeValidator(address _validator) external onlyOwner {
@@ -72,21 +89,25 @@ contract VerifingClaimerV2 is Ownable {
         bytes32[] calldata _rewardProof,
         Proof calldata _zkPassProof
     ) external {
-        if (endTimestamp < block.timestamp) {
-            revert ClaimEnded();
+        uint256 curr = endTimestamps[_projectId];
+        if (curr == 0) {
+            revert InvalidProjectId(_projectId);
+        }
+        if (curr < block.timestamp) {
+            revert ClaimEnded(_projectId);
         }
         address _account = _zkPassProof.recipient;
         bytes32 _zkId = _zkPassProof.uHash;
-        if (claimedAccount[_projectId][_account]) {
+        if (claimedAccounts[_projectId][_account]) {
             revert ClaimedAccount(_projectId, _account);
         }
         if (_zkId != 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) {
-            if (claimedZkId[_zkId]) {
-                revert ClaimedZkId(_zkId);
+            if (claimedZkIds[_projectId][_zkId]) {
+                revert ClaimedZkId(_projectId, _zkId);
             }
-            claimedZkId[_zkId] = true;
+            claimedZkIds[_projectId][_zkId] = true;
         }
-        bytes32 node = keccak256(abi.encodePacked(_projectId, _account, _doubleCheck, _amount));
+        bytes32 node = keccak256(abi.encodePacked(_account, _doubleCheck, _amount));
         if (_doubleCheck) {
             address _validator = node.recover(signature);
             if (_validator != validator) {
@@ -96,12 +117,33 @@ contract VerifingClaimerV2 is Ownable {
                 revert InvalidZKPassProof();
             }
         }
-        if (!MerkleProof.verify(_rewardProof, rewardRoot, node)) {
+        if (!MerkleProof.verify(_rewardProof, rewardRoots[_projectId], node)) {
             revert InvalidRewardProof();
         }
 
-        claimedAccount[_projectId][_account] = true;
-        vault.claim(rewardToken, _account, _amount);
-        emit Claim(rewardToken, _projectId, _account, _amount);
+        address token = rewardTokens[_projectId];
+        claimedAccounts[_projectId][_account] = true;
+        vault.claim(token, _account, _amount);
+        emit Claim(token, _projectId, _account, _amount);
+    }
+
+    function rewardRoot(uint256 projectId) public view returns (bytes32) {
+        return rewardRoots[projectId];
+    }
+
+    function endTimestamp(uint256 projectId) public view returns (uint256) {
+        return endTimestamps[projectId];
+    }
+
+    function rewardToken(uint256 projectId) public view returns (address) {
+        return rewardTokens[projectId];
+    }
+
+    function claimedAccount(uint256 projectId, address account) public view returns (bool) {
+        return claimedAccounts[projectId][account];
+    }
+
+    function claimedZkId(uint256 projectId, bytes32 zkId) public view returns (bool) {
+        return claimedZkIds[projectId][zkId];
     }
 }

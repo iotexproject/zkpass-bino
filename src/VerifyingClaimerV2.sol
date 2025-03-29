@@ -60,11 +60,10 @@ contract VerifingClaimerV2 is Ownable {
     }
 
     function extendEndTimestamp(uint256 _projectId, uint256 _endTimestamp) external onlyOwner {
-        uint256 curr = endTimestamps[_projectId];
-        if (curr == 0) {
+        if (endTimestamps[_projectId] == 0) {
             revert InvalidProjectId(_projectId);
         }
-        if (_endTimestamp < curr) {
+        if (_endTimestamp < block.timestamp) {
             revert InvalidEndTimestamp();
         }
 
